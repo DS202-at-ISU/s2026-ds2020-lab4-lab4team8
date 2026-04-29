@@ -1,0 +1,161 @@
+---
+title: "Lab 4: Scraping into the Hall of Fame"
+author: "Wyatt Sinclair"
+date: "4/29/2026"
+output: html_document
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(rvest)
+library(readr)
+library(Lahman)
+library(stringr)
+```
+
+
+## Scrape the Baseball Reference Hall of Fame Page
+
+```{r scrape-data, message=FALSE, warning=FALSE}
+url <- "https://www.baseball-reference.com/awards/hof_2026.shtml"
+
+html <- read_html(url)
+
+tables <- html_table(html, fill = TRUE)
+
+length(tables)
+```
+
+## Look at the Tables
+
+```{r inspect-tables}
+for (i in seq_along(tables)) {
+  cat("\nTable", i, "\n")
+  print(head(tables[[i]], 3))
+}
+```
+
+## Select the Hall of Fame Voting Table
+
+```{r select-table}
+raw_hof <- tables[[1]]
+
+head(raw_hof, 10)
+glimpse(raw_hof)
+```
+
+
+
+## Clean the Scraped Data
+
+```{r clean-data}
+# The real column names are stored in the first row of the scraped table.
+# Save the first row as column names, then remove that row from the data.
+actual_col_names <- as.character(raw_hof[1, ])
+names(raw_hof) <- actual_col_names
+raw_hof <- raw_hof[-1, ]
+
+
+# This changes %vote into X.vote.
+names(raw_hof) <- make.names(names(raw_hof), unique = TRUE)
+
+hof_2026 <- raw_hof %>%
+  filter(!is.na(Name)) %>%
+  filter(Name != "Name") %>%
+  filter(Name != "") %>%
+  mutate(
+    candidate_name = gsub("^X-", "", Name),
+    candidate_name = str_squish(candidate_name),
+
+    year = 2026,
+
+    votes = parse_number(as.character(Votes)),
+
+    percent_vote = parse_number(as.character(X.vote)),
+
+    inducted = ifelse(percent_vote >= 75, "Y", "N")
+  ) %>%
+  select(
+    candidate_name,
+    year,
+    votes,
+    percent_vote,
+    inducted
+  )
+
+hof_2026
+```
+
+## Check Variable Types
+
+```{r check-types}
+glimpse(hof_2026)
+
+summary(hof_2026)
+```
+
+## Save the Cleaned Dataset
+
+```{r save-csv}
+write_csv(hof_2026, "HallOfFame_2026.csv")
+```
+
+## Read the Saved File Back In
+
+```{r check-saved-file}
+hof_2026_check <- read_csv("HallOfFame_2026.csv", show_col_types = FALSE)
+
+head(hof_2026_check)
+```
+
+## Compare to Lahman
+
+```{r lahman-data}
+lahman_2026 <- HallOfFame %>%
+  filter(yearID == 2026)
+
+lahman_2026
+```
+
+## Count Inducted Candidates in Each Dataset
+
+```{r compare-counts}
+scraped_counts <- hof_2026 %>%
+  count(inducted)
+
+lahman_counts <- lahman_2026 %>%
+  count(votedBy, inducted)
+
+scraped_counts
+lahman_counts
+```
+
+## View Cleaned 2026 Voting Results
+
+```{r cleaned-results}
+hof_2026 %>%
+  arrange(desc(percent_vote)) %>%
+  select(candidate_name, votes, percent_vote, inducted)
+```
+
+## Visualization
+
+```{r vote-graph}
+ggplot(hof_2026, aes(x = reorder(candidate_name, percent_vote), y = percent_vote, fill = inducted)) +
+  geom_col() +
+  geom_hline(yintercept = 75, linetype = "dashed") +
+  coord_flip() +
+  labs(
+    title = "2026 Baseball Hall of Fame Voting Results",
+    x = "Candidate",
+    y = "Percent of Vote",
+    fill = "Inducted"
+  ) +
+  theme_minimal()
+```
+
+## Notes and Observations
+
+The scraped Baseball Reference data gives a full list of candidates from the 2026 Hall of Fame voting page. I cleaned the data by keeping the candidate name, year, votes, percent of vote, and induction status. I used the 75 percent voting cutoff to create the inducted variable.
+
+The Lahman data does not match Baseball Reference row-for-row because the two sources store Hall of Fame data differently. Baseball Reference presents the full BBWAA ballot, while Lahman stores voting records using player IDs and voting bodies. Because of this, the row counts and structure may be different, but both datasets can still be used to understand the 2026 Hall of Fame voting results.
