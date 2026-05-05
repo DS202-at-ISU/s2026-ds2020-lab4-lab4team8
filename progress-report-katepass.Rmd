@@ -1,7 +1,68 @@
 ---
 title: "progress-report-katepass"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(Lahman)
+library(rvest)
+library(tidyverse)
+library(ggplot2)
+library(readr)
+```
+
+#scrape data from baseball-reference.com
+```{r}
+url <-"https://www.baseball-reference.com/awards/hof_2026.shtml"
+html <- read_html(url)
+
+table <- html |> html_table(fill=TRUE)
+#Get 2 tables, Hall of Fame is the first
+
+hof_table <- table[[1]]
+head(hof_table)
+```
+#reset column names because they were previously row 1
+```{r}
+colnames(hof_table) <- hof_table[1,]
+hof_table <- hof_table[-1,]
+
+```
+
+```{r}
+head(hof_table)
+```
+```{r}
+#Lahman Hall Of Fame table
+hof_og <- HallOfFame
+head(hof_og)
+```
+
+#cleaning data
+```{r}
+hof_table$Votes <- as.numeric(hof_table$Votes)
+hof_table$percent_vote <-readr::parse_number(hof_table$`%vote`)
+
+hof_2026 <- hof_table |> select(Name, Votes, percent_vote, `%vote`) |> mutate(Year = 2026, Votes = as.numeric(Votes), percent_vote=parse_number(`%vote`), inducted = ifelse(percent_vote >= 75, "Y", "N"))
+
+head(hof_2026)
+```
+
+#WyattSinclair cleaned the dataset and uploaded it to GitHub. I will be using his cleaned dataset for this chart.
+```{r}
+hof_clean <- read_csv("HallOfFame_2026.csv")
+
+#hof_clean
+hof_clean |> ggplot(aes(x = reorder(candidate_name, percent_vote), y = percent_vote, fill = inducted))+geom_col()+coord_flip()+labs(title="2026 Hall Of Fame Results", x="Canidate", y="Percent Vote")
+```
+
+
+#Compare Lahman and my new HOF dataset
+```{r}
+lahman_2026 <- hof_og |> filter(yearID ==2026)
+hof_clean |> count(inducted)
+lahman_2026 |> count(votedBy, inducted)
 ```
