@@ -1,0 +1,58 @@
+---
+title: "lab 4"
+output: html_document
+date: "2026-05-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(rvest)
+library(dplyr)
+library(readr)
+library(Lahman)
+library(ggplot2)
+```
+```{r}
+url <- "https://www.baseball-reference.com/awards/hof_2026.shtml"
+html <- read_html(url)
+tables <- html_table(html)
+```
+```{r}
+data <- tables[[1]]
+actual_col_names <- data[1, ]
+colnames(data) <- actual_col_names
+data <- data[-1, ]
+head(data, 3)
+```
+```{r}
+hof_2026 <- data %>%
+  select(Name, Votes, `%vote`) %>%
+  mutate(
+    yearID = 2026,
+    Votes = as.numeric(Votes),
+    percent_vote = readr::parse_number(`%vote`),
+    inducted = ifelse(percent_vote >= 75, "Y", "N")
+  )
+
+head(hof_2026)
+```
+```{r}
+hof_2026 %>%
+  ggplot(aes(x = reorder(Name, percent_vote), y = percent_vote, fill = inducted)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  geom_hline(yintercept = 75, color = "red", linetype = "dashed") +
+  labs(
+    title = "2026 Hall of Fame Vote Percentages",
+    x = "Player",
+    y = "% of Votes",
+    fill = "Inducted"
+  ) +
+  theme_minimal()
+```
+observations: Red dashed line shows the 75% induction threshold. Carlos Beltran and Andruw Jones both cleared 75%.
